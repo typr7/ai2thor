@@ -7,6 +7,7 @@ using System.Reflection;
 using UnityStandardAssets.CrossPlatformInput;
 using UnityStandardAssets.Utility;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.Rendering.PostProcessing;
 using Random = UnityEngine.Random;
 using UnityStandardAssets.ImageEffects;
@@ -18,6 +19,8 @@ using Thor.Procedural;
 using Thor.Procedural.Data;
 using Newtonsoft.Json;
 
+using GLTFast.Export;
+
 using MessagePack.Resolvers;
 using MessagePack.Formatters;
 using MessagePack;
@@ -25,6 +28,9 @@ using MessagePack;
 using System.IO;
 using System.IO.Compression;
 using System.Linq.Expressions;
+using System.Threading.Tasks;
+using GLTFast;
+using System.Data;
 
 namespace UnityStandardAssets.Characters.FirstPerson {
 
@@ -184,8 +190,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
         public bool clearRandomizeMaterialsOnReset = false;
 
         private List<DebugSphere> debugSpheres = new List<DebugSphere>();
-            
-            
+
+
 
         // these object types can have a placeable surface mesh associated ith it
         // this is to be used with screenToWorldTarget to filter out raycasts correctly
@@ -209,7 +215,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             this.m_CharacterController = GetComponent<CharacterController>();
             collidedObjects = new string[0];
             collisionsInAction = new List<string>();
-            
+
             // set agent initial states
             targetRotation = transform.rotation;
 
@@ -218,8 +224,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             // culling in FirstPersonCharacterCull.cs to ignore tall mode renderers
             HideAllAgentRenderers();
             // default nav mesh agent to false cause WHY DOES THIS BREAK THINGS I GUESS IT DOESN TLIKE TELEPORTING
-            if(this.GetComponentInChildren<NavMeshAgent>())
-            this.GetComponentInChildren<NavMeshAgent>().enabled = false;
+            if (this.GetComponentInChildren<NavMeshAgent>())
+                this.GetComponentInChildren<NavMeshAgent>().enabled = false;
 
             // Recording initially disabled renderers and scene bounds
             // then setting up sceneBounds based on encapsulating all renderers
@@ -246,7 +252,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
         void Start() {
             Debug.Log("------------- BASE FPS Start");
-            
+
         }
 
         // callback triggered by BaseAgentComponent
@@ -437,10 +443,10 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             } else if (actionReturn != null) {
                 Debug.Log($"actionReturn: '{actionReturn}'");
             }
-            
+
 #endif
         }
-        
+
         public virtual void Complete(ActionFinished result) {
             // Check to not call `actionFinished` twice and overwriting values when running in new mode
             // TODO: remove check once legacy actions are gone. 
@@ -660,13 +666,12 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
         public abstract void InitializeBody(ServerAction initializeAction);
 
-         private bool ValidRotateStepDegreesWithSnapToGrid(float rotateDegrees) {
+        private bool ValidRotateStepDegreesWithSnapToGrid(float rotateDegrees) {
             // float eps = 0.00001f;
             return rotateDegrees == 90.0f || rotateDegrees == 180.0f || rotateDegrees == 270.0f || (rotateDegrees % 360.0f) == 0.0f;
         }
 
         public void Initialize(ServerAction action) {
-
             // Debug.Log("RUNNING B");
             // limit camera from looking too far down/up
             //default max are 30 up and 60 down, different agent types may overwrite this
@@ -736,21 +741,21 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 this.rotateStepDegrees = action.rotateStepDegrees;
             }
 
-             if (action.snapToGrid && !ValidRotateStepDegreesWithSnapToGrid(action.rotateStepDegrees)) {
+            if (action.snapToGrid && !ValidRotateStepDegreesWithSnapToGrid(action.rotateStepDegrees)) {
                 errorMessage = $"Invalid values 'rotateStepDegrees': ${action.rotateStepDegrees} and 'snapToGrid':${action.snapToGrid}. 'snapToGrid': 'True' is not supported when 'rotateStepDegrees' is different from grid rotation steps of 0, 90, 180, 270 or 360.";
                 Debug.Log(errorMessage);
                 actionFinished(false);
                 return;
             }
 
-            if(action.maxDownwardLookAngle < 0) {
+            if (action.maxDownwardLookAngle < 0) {
                 errorMessage = "maxDownwardLookAngle must be a non-negative float";
                 Debug.Log(errorMessage);
                 actionFinished(false);
                 return;
             }
 
-            if(action.maxUpwardLookAngle < 0) {
+            if (action.maxUpwardLookAngle < 0) {
                 errorMessage = "maxUpwardLookAngle must be a non-negative float";
                 Debug.Log(errorMessage);
                 actionFinished(false);
@@ -812,7 +817,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
         public IEnumerator checkInitializeAgentLocationAction() {
             yield return null;
-            
+
             if (agentManager.agentMode != "stretchab") {
                 Vector3 startingPosition = this.transform.position;
                 // move ahead
@@ -833,7 +838,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                         yield return null;
 
                         Vector3 target = new Vector3(x, this.transform.position.y, z);
-                        
+
                         Vector3 dir = target - this.transform.position;
                         Vector3 movement = dir.normalized * 100.0f;
                         // Debug.Log("Target is at " + target + ", dir is at " + dir.y + ", and movement is " + movement);
@@ -843,10 +848,10 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                         // Debug.Log("PRE: movement-y is " + movement.y);
                         movement.y = Physics.gravity.y * this.m_GravityMultiplier;
                         // Debug.Log("POST: movement-y is  " + movement.y);
-                    if (agentManager.agentMode != "stretchab") {
-                        m_CharacterController.Move(movement);
-                        // Debug.Log("THIS SHOULDN'T BE SHOWING, but somehow agentMode is " + agentManager.agentMode);
-                    }
+                        if (agentManager.agentMode != "stretchab") {
+                            m_CharacterController.Move(movement);
+                            // Debug.Log("THIS SHOULDN'T BE SHOWING, but somehow agentMode is " + agentManager.agentMode);
+                        }
                         for (int i = 0; i < actionDuration; i++) {
                             yield return null;
                             Vector3 diff = this.transform.position - target;
@@ -863,19 +868,19 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 this.transform.position = startingPosition;
                 autoSyncTransforms();
                 yield return null;
-                
+
                 if (validMovements.Count > 0) {
                     //Debug.Log("Initialize: got total valid initial targets: " + validMovements.Count);
                     Vector3 firstMove = validMovements[0];
                     // Debug.Log("First move is this: " + firstMove);
                     // Debug.Log("STAGE 3. Starting position is (" + this.transform.position.x + ", " + this.transform.position.y + ", " + this.transform.position.z + ")");
-                    
+
                     firstMove.y = Physics.gravity.y * this.m_GravityMultiplier;
 
                     m_CharacterController.Move(firstMove);
                     // Debug.Log("STAGE 4. Starting position is (" + this.transform.position.x + ", " + this.transform.position.y + ", " + this.transform.position.z + ")");
                     snapAgentToGrid();
-                    
+
                     actionFinished(true, new InitializeReturn {
                         cameraNearPlane = m_Camera.nearClipPlane,
                         cameraFarPlane = m_Camera.farClipPlane
@@ -942,7 +947,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                             $"inRoomTypes contains unknown room type: {roomType}.\n" +
                             "Valid room types include {\"Bedroom\", \"Bathroom\", \"LivingRoom\", \"Kitchen\", \"RoboTHOR\"}"
                         );
-                    };
+                    }
+                    ;
                     chosenRoomTypes.Add(roomType.ToLower());
                 }
             }
@@ -1684,7 +1690,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     toReParent.GetComponent<Rigidbody>().isKinematic = true;
                 }
             }
-            
+
             // set conditions for ignoring certain fail-conditions or not
             // (must be stored on CanOpen_Object component for OnTriggerEnter event to work)
             openableObject.SetForceAction(forceAction);
@@ -1705,7 +1711,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             yield return new WaitUntil(() => (openableObject.GetIsCurrentlyLerping() == false));
             yield return null;
             bool succeeded = true;
-            
+
             // if failure occurred, revert back to backup state (either start or lastSuccessful), and then report failure
             if (openableObject.GetFailState() != CanOpen_Object.failState.none) {
                 succeeded = false;
@@ -1723,8 +1729,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 yield return null;
                 if (openableObject.GetFailState() == CanOpen_Object.failState.collision) {
                     errorMessage = "Openable object collided with " + openableObject.GetFailureCollision().name;
-                }
-                else if (openableObject.GetFailState() == CanOpen_Object.failState.hyperextension) {
+                } else if (openableObject.GetFailState() == CanOpen_Object.failState.hyperextension) {
                     errorMessage = "Agent hyperextended arm while opening object";
                 }
             }
@@ -1744,7 +1749,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             // Reset conditions for next interaction
             openableObject.SetFailState(CanOpen_Object.failState.none);
             openableObject.SetFailureCollision(null);
-            
+
             openableObject.SetForceAction(false);
             openableObject.SetIgnoreAgentInTransition(false);
             openableObject.SetStopAtNonStaticCol(false);
@@ -1905,16 +1910,15 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             int layerMask = 1 << 8;
             GameObject magnetSphere = this.GetComponent<BaseAgentComponent>().IKArm.GetComponent<IK_Robot_Arm_Controller>().GetMagnetSphere();
             foreach (GameObject movingPart in codd.GetComponent<CanOpen_Object>().MovingParts) {
-                foreach(Collider col in movingPart.GetComponentsInChildren<Collider>()) {
+                foreach (Collider col in movingPart.GetComponentsInChildren<Collider>()) {
                     // Checking for matches between moving parts' colliders and colliders inside of gripper-sphere
-                    foreach(Collider containedCol in Physics.OverlapSphere(
+                    foreach (Collider containedCol in Physics.OverlapSphere(
                         magnetSphere.transform.TransformPoint(magnetSphere.GetComponent<SphereCollider>().center),
                         magnetSphere.transform.GetComponent<SphereCollider>().radius,
                         layerMask)) {
-                            if (col == containedCol)
-                            {
-                                return movingPart;
-                            }
+                        if (col == containedCol) {
+                            return movingPart;
+                        }
                     }
                 }
             }
@@ -2064,7 +2068,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             HashSet<SimObjPhysics> filter = new HashSet<SimObjPhysics>();
             HashSet<string> filterObjectTypes = new HashSet<string>(objectTypes);
             foreach (var simObj in simObjects) {
-                if (filterObjectTypes.Contains( Enum.GetName(typeof(SimObjType), simObj.Type) )) {
+                if (filterObjectTypes.Contains(Enum.GetName(typeof(SimObjType), simObj.Type))) {
                     filter.Add(simObj);
                 }
             }
@@ -2388,7 +2392,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     this.simObjFilter
                 )
             );
-            
+
             metaMessage.isSceneAtRest = physicsSceneManager.isSceneAtRest;
             metaMessage.sceneBounds = GenerateSceneBounds(agentManager.SceneBounds);
 
@@ -2450,11 +2454,9 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             // ARM
             if (Arm != null) {
                 metaMessage.arm = Arm.GenerateMetadata();
-            }
-            else if (SArm != null) {
+            } else if (SArm != null) {
                 metaMessage.arm = SArm.GenerateMetadata();
-            }
-            else if (AArm != null) {
+            } else if (AArm != null) {
                 metaMessage.articulationArm = AArm.GenerateArticulationMetadata();
             }
 
@@ -2548,7 +2550,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             ProcessControlCommand(controlCommand: controlCommand, target: this);
         }
 
-        public void ProcessControlCommand<T>(DynamicServerAction controlCommand, T target) where T: ActionInvokable{
+        public void ProcessControlCommand<T>(DynamicServerAction controlCommand, T target) where T : ActionInvokable {
             lastActionInitialPhysicsSimulateCount = PhysicsSceneManager.PhysicsSimulateCallCount;
             errorMessage = "";
             errorCode = ServerActionErrorCode.Undefined;
@@ -2605,9 +2607,9 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 // throws an exception. It is used to short circuit errors,
                 // which terminates the action immediately.
 #if UNITY_EDITOR
-		Debug.Log("Caught target invocation exception");
-		Debug.Log(e);
-		Debug.Log(e.InnerException.Message);
+                Debug.Log("Caught target invocation exception");
+                Debug.Log(e);
+                Debug.Log(e.InnerException.Message);
 #endif
                 actionFinished(
                     success: false,
@@ -2616,8 +2618,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             } catch (MissingActionFinishedException e) {
                 errorCode = ServerActionErrorCode.MissingActionFinished;
                 actionFinished(
-                    false, 
-                    errorMessage:  $"Action '{controlCommand.action}' did not return an `ActionFinished`. Possible bug with the action and it's execution path given the arguments it was called with. Arguments: {controlCommand.jObject.ToString()}"
+                    false,
+                    errorMessage: $"Action '{controlCommand.action}' did not return an `ActionFinished`. Possible bug with the action and it's execution path given the arguments it was called with. Arguments: {controlCommand.jObject.ToString()}"
                 );
 
             } catch (Exception e) {
@@ -3177,15 +3179,15 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             }
         }
 
-      public void TeleportObject(
-            string objectId,
-            Vector3 position,
-            Vector3 rotation,
-            bool forceAction = false,
-            bool forceKinematic = false,
-            bool allowTeleportOutOfHand = false,
-            bool makeUnbreakable = false
-        ) {
+        public void TeleportObject(
+              string objectId,
+              Vector3 position,
+              Vector3 rotation,
+              bool forceAction = false,
+              bool forceKinematic = false,
+              bool allowTeleportOutOfHand = false,
+              bool makeUnbreakable = false
+          ) {
             if (!physicsSceneManager.ObjectIdToSimObjPhysics.ContainsKey(objectId)) {
                 errorMessage = $"Cannot find object with id {objectId}";
                 actionFinished(false);
@@ -3403,7 +3405,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     actionFinished(false);
                     yield break;
                 }
-                
+
                 DefaultAgentHand();
                 actionFinished(true, sop.transform.position);
 
@@ -3707,7 +3709,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 return position;
             }
         }
-        
+
         protected T[] flatten2DimArray<T>(T[,] array) {
             int nrow = array.GetLength(0);
             int ncol = array.GetLength(1);
@@ -3822,7 +3824,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 }
 
                 foreach (Collider c in this.GetComponentsInChildren<Collider>()) {
-                    if(c.transform.gameObject.layer == LayerMask.NameToLayer("ArticulatedAgent") || c.transform.gameObject.layer == LayerMask.NameToLayer("FloorAgent")) {
+                    if (c.transform.gameObject.layer == LayerMask.NameToLayer("ArticulatedAgent") || c.transform.gameObject.layer == LayerMask.NameToLayer("FloorAgent")) {
                         continue;
                     }
 
@@ -4022,7 +4024,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 AxisAlignedBoundingBox aabb = sop.AxisAlignedBoundingBox;
                 if (!GeometryUtility.TestPlanesAABB(
                     planes: planes,
-                    bounds: new Bounds(center: aabb.center, size:aabb.size)
+                    bounds: new Bounds(center: aabb.center, size: aabb.size)
                 )) {
                     return visCheck;
                 }
@@ -4199,11 +4201,11 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     $"Visibility scheme {visSchemeEnum} is not implemented. Must be 'distance' or 'collider'."
                 );
             }
-            #if UNITY_EDITOR
-                foreach (SimObjPhysics sop in visible) {
-                    Debug.Log("Visible: " + sop.name);
-                }
-            #endif
+#if UNITY_EDITOR
+            foreach (SimObjPhysics sop in visible) {
+                Debug.Log("Visible: " + sop.name);
+            }
+#endif
 
             // Return only the ObjectIds of the visible objects
             actionFinishedEmit(true, visible.Select(sop => sop.ObjectID).ToList());
@@ -4219,9 +4221,9 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 annotations[sop.ObjectID]["objectType"] = oa.ObjectCategory;
                 annotations[sop.ObjectID]["dataset"] = oa.MostSpecificDataset.ToString();
 
-//                Debug.Log(sop.ObjectID);
-//                Debug.Log(oa.ObjectCategory);
-//                Debug.Log(oa.MostSpecificDataset.ToString());
+                //                Debug.Log(sop.ObjectID);
+                //                Debug.Log(oa.ObjectCategory);
+                //                Debug.Log(oa.MostSpecificDataset.ToString());
             }
 
             actionFinishedEmit(true, annotations);
@@ -4353,8 +4355,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 foreach (SimObjPhysics sop in Arm.heldObjects.Keys) {
                     sopAndIncInvisibleTuples.Add((sop, false));
                 }
-            }
-            else if (SArm != null && SArm.gameObject.activeSelf) {
+            } else if (SArm != null && SArm.gameObject.activeSelf) {
                 foreach (SimObjPhysics sop in SArm.heldObjects.Keys) {
                     sopAndIncInvisibleTuples.Add((sop, false));
                 }
@@ -4418,7 +4419,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
         }
 
 
-// check if the visibility point on a sim object, sop, is within the viewport
+        // check if the visibility point on a sim object, sop, is within the viewport
         // has a includeInvisible bool to check against triggerboxes as well, to check for visibility with things like Cabinets/Drawers
         protected VisibilityCheck CheckIfVisibilityPointRaycast(
             SimObjPhysics sop,
@@ -4442,8 +4443,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 mask = LayerMask.GetMask("SimObjVisible", "Procedural1", "Procedural2", "Procedural3", "Procedural0", "Agent");
             }
 
-            bool isSopHeldByArm = ( Arm != null && Arm.gameObject.activeSelf && Arm.heldObjects.ContainsKey(sop) ) ||
-                                  ( SArm != null && SArm.gameObject.activeSelf && SArm.heldObjects.ContainsKey(sop) );
+            bool isSopHeldByArm = (Arm != null && Arm.gameObject.activeSelf && Arm.heldObjects.ContainsKey(sop)) ||
+                                  (SArm != null && SArm.gameObject.activeSelf && SArm.heldObjects.ContainsKey(sop));
 
             // check raycast against both visible and invisible layers, to check against ReceptacleTriggerBoxes which are normally
             // ignored by the other raycast
@@ -4451,7 +4452,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 if (Physics.Raycast(camera.transform.position, position - camera.transform.position, out hit, raycastDistance, mask)) {
                     if (
                         hit.transform == sop.transform
-                        || ( isSopHeldByArm && ((Arm != null && Arm.heldObjects[sop].Contains(hit.collider)) || (SArm != null && SArm.heldObjects[sop].Contains(hit.collider))) )
+                        || (isSopHeldByArm && ((Arm != null && Arm.heldObjects[sop].Contains(hit.collider)) || (SArm != null && SArm.heldObjects[sop].Contains(hit.collider))))
                     ) {
                         visCheck.visible = true;
                         visCheck.interactable = true;
@@ -4475,7 +4476,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             ) {
                 if (
                     hit.transform == sop.transform
-                    || ( isSopHeldByArm && ((Arm != null && Arm.heldObjects[sop].Contains(hit.collider)) || (SArm != null && SArm.heldObjects[sop].Contains(hit.collider))) )
+                    || (isSopHeldByArm && ((Arm != null && Arm.heldObjects[sop].Contains(hit.collider)) || (SArm != null && SArm.heldObjects[sop].Contains(hit.collider))))
                 ) {
                     // if this line is drawn, then this visibility point is in camera frame and not occluded
                     // might want to use this for a targeting check as well at some point....
@@ -4618,9 +4619,9 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                         b.Encapsulate(c.bounds);
                     }
                 }
-                #if UNITY_EDITOR
+#if UNITY_EDITOR
                 Debug.Log(Mathf.Sqrt(b.extents.x * b.extents.x + b.extents.z * b.extents.z));
-                #endif
+#endif
                 radius = Mathf.Max(
                     radius,
                     Mathf.Max(b.extents.x, b.extents.z)
@@ -4629,10 +4630,10 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             this.transform.rotation = oldRot;
             Physics.SyncTransforms();
 
-                #if UNITY_EDITOR
-                Debug.Log("Final radius");
-                Debug.Log(radius);
-                #endif
+#if UNITY_EDITOR
+            Debug.Log("Final radius");
+            Debug.Log(radius);
+#endif
             actionFinishedEmit(true, radius);
         }
 
@@ -4901,9 +4902,9 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             }
             Vector3 halfSize = 0.5f * bc.size;
 
-            List<float> xMinMax = new List<float> {-halfSize.x, halfSize.x};
-            List<float> yMinMax = new List<float> {-halfSize.y, halfSize.y};
-            List<float> zMinMax = new List<float> {-halfSize.z, halfSize.z};
+            List<float> xMinMax = new List<float> { -halfSize.x, halfSize.x };
+            List<float> yMinMax = new List<float> { -halfSize.y, halfSize.y };
+            List<float> zMinMax = new List<float> { -halfSize.z, halfSize.z };
 
             List<float> xCenterVals = new List<float>();
             List<float> yCenterVals = new List<float>();
@@ -4917,7 +4918,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
             for (int whichX = 0; whichX < 2; whichX++) {
                 List<float> xVals = whichX == 1 ? xMinMax : xCenterVals;
-                
+
                 for (int whichY = 0; whichY < 2; whichY++) {
                     List<float> yVals = whichY == 1 ? yMinMax : yCenterVals;
 
@@ -4928,9 +4929,9 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                             continue;
                         }
 
-                        # if UNITY_EDITOR
+#if UNITY_EDITOR
                         Vector3? lastPoint = null;
-                        # endif
+#endif
                         foreach (float x in xVals) {
                             foreach (float y in yVals) {
                                 foreach (float z in zVals) {
@@ -4953,7 +4954,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             }
         }
 
-        public void BBoxDistance(string objectId0, string objectId1, int divisions=3) {
+        public void BBoxDistance(string objectId0, string objectId1, int divisions = 3) {
             SimObjPhysics sop0 = getSimObjectFromId(objectId0);
             SimObjPhysics sop1 = getSimObjectFromId(objectId1);
             if (sop0 == null || sop1 == null) {
@@ -5077,7 +5078,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
             toReturn["adjacent"] = objectsInWay.Count == 0;
 #if UNITY_EDITOR
-            string are_arent = (bool) toReturn["adjacent"] ? "are" : "aren't";
+            string are_arent = (bool)toReturn["adjacent"] ? "are" : "aren't";
             Debug.Log($"Objects {are_arent} adjacent ({String.Join(", ", objectsInWay)}).");
 #endif
             toReturn["objectInWay"] = objectsInWay;
@@ -5156,7 +5157,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             return onObjectIds;
         }
 
-        public void CheckWhatObjectOn(string objectId, int divisions=3, float belowDistance=1e-2f) {
+        public void CheckWhatObjectOn(string objectId, int divisions = 3, float belowDistance = 1e-2f) {
             SimObjPhysics sop = getSimObjectFromId(objectId);
             if (sop == null) {
                 actionFinishedEmit(false); // Error message set already by getSimObjectFromId
@@ -5168,7 +5169,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             );
         }
 
-        public void CheckWhatObjectsOn(List<string> objectIds, int divisions=3, float belowDistance=1e-2f) {
+        public void CheckWhatObjectsOn(List<string> objectIds, int divisions = 3, float belowDistance = 1e-2f) {
             Dictionary<string, List<string>> objectIdToOnObjectId = new Dictionary<string, List<string>>();
             foreach (string objectId in objectIds) {
                 SimObjPhysics sop = getSimObjectFromId(objectId);
@@ -5545,8 +5546,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 SimObjPhysics sop = getSimObjectFromTypeOrId(objectType, objectId);
                 path = getShortestPath(sop, true, navMeshId: navMeshId);
                 visibilityTest = () => objectIsWithinViewport(sop);
-            }
-            else {
+            } else {
                 var startPosition = this.transform.position;
                 var startRotation = this.transform.rotation;
                 SafelyComputeNavMeshPath(startPosition, position.Value, path, DefaultAllowedErrorInShortestPath, navMeshId);
@@ -5554,7 +5554,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             }
 
             if (path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete) {
-                int parts = (int) Math.Round(360f / rotateStepDegrees);
+                int parts = (int)Math.Round(360f / rotateStepDegrees);
                 if (Math.Abs((parts * 1.0f) - 360f / rotateStepDegrees) > 1e-5) {
                     errorMessage = "Invalid rotate step degrees for agent, must divide 360 without a remainder.";
                     return null;
@@ -5878,7 +5878,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
             Vector3 point1 = startPositionCapsuleCenter + new Vector3(0, innerHeight, 0);
             Vector3 point2 = startPositionCapsuleCenter + new Vector3(0, -innerHeight + skinWidth, 0);
-            
+
             return Physics.CapsuleCastAll(
                 point1: point1,
                 point2: point2,
@@ -6067,7 +6067,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             agentTransform.rotation = originalAgentRotation;
             m_Camera.transform.rotation = originalCameraRotation;
 
-            if(!wasObjectVisible) {
+            if (!wasObjectVisible) {
                 throw new InvalidOperationException(
                     $"Target object {targetSOP.objectID} is not visible on navigation path given current agent parameters: maxVisibleDistance ({maxVisibleDistance}), gridSize ({gridSize}), fieldOfView ({m_Camera.fieldOfView}), camera width ({Screen.width}), camera height ({Screen.height})"
                 );
@@ -6127,7 +6127,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             float allowedError,
             int? navMeshId = null
         ) {
-             Debug.Log($"---Safely compute mesh.");
+            Debug.Log($"---Safely compute mesh.");
             float floorY = Math.Min(
                 getFloorY(start.x, start.y, start.z),
                 getFloorY(target.x, target.y, target.z)
@@ -6161,7 +6161,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     );
                 }
             }
-            
+
             float startOffset = Vector3.Distance(
                 startHit.position,
                 new Vector3(startPosition.x, startHit.position.y, startPosition.z)
@@ -6192,7 +6192,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             navMeshAgent.radius = 2.0f;
             // navMeshAgent.agentTypeID = 
 
-            
+
             var navmeshSurfaces = GameObject.FindObjectsOfType<NavMeshSurfaceExtended>();
 
             Debug.Log($"-----Navmesh  Query {navMeshId} navmesh count: {navmeshSurfaces.Count()} extended active count: {NavMeshSurfaceExtended.activeSurfaces.Count} navmesh active count: {NavMeshSurface.activeSurfaces.Count}");
@@ -6204,16 +6204,16 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
             Debug.Log("---- Reached agent navmeshid " + queryAgentId);
 
-            
+
 
 
             // bool pathSuccess = navMeshAgent.CalculatePath(
             //     targetHit.position, path
             // );
-            
+
             foreach (var nvms in navmeshSurfaces) {
                 if (nvms != navMesh) {
-                    nvms.enabled = false; 
+                    nvms.enabled = false;
                 }
             }
             Debug.Log($"-----Navmesh  Query {queryAgentId} navmesh count: {navmeshSurfaces.Count()}");
@@ -6228,7 +6228,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
             Debug.Log($"-----Navmesh  Pathsuccess {pathSuccess}");
 
-            foreach(var nvms in navmeshSurfaces) {
+            foreach (var nvms in navmeshSurfaces) {
                 nvms.enabled = true;
             }
 
@@ -6247,7 +6247,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             VisualizePath(startHit.position, path);
 #endif
             this.GetComponentInChildren<UnityEngine.AI.NavMeshAgent>().enabled = false;
-            
+
         }
 
         private void randomizeSmoothness(string objectId) {
@@ -6285,7 +6285,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             }
             actionFinished(true);
         }
-        
+
         public void RandomizeSmoothness(string objectId) {
             randomizeSmoothness(objectId: objectId);
             actionFinished(success: true);
@@ -6329,19 +6329,18 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 // else {
                 //     return null;
                 // }
-            }
-            else if (!idSet.Contains(navMeshId.GetValueOrDefault()))  {
+            } else if (!idSet.Contains(navMeshId.GetValueOrDefault())) {
                 // actionFinished(success: false, errorMessage: $"Invalid agent id: '{navMeshId.GetValueOrDefault()}' provide a valid agent id for using with the NavMeshes available or bake a new NavMesh. Available: '{string.Join(", ",idSet.Select(i => i.ToString()) )}'");
                 // errorMessage = $"Invalid agent id: '{navMeshId.GetValueOrDefault()}' provide a valid agent id for using with the NavMeshes available or bake a new NavMesh. Available: '{string.Join(", ",idSet.Select(i => i.ToString()) )}'";
                 throw new InvalidOperationException(
-                        $"Invalid agent id: '{navMeshId.GetValueOrDefault()}' provide a valid agent id for using with the NavMeshes available or bake a new NavMesh. Available: '{string.Join(", ",idSet.Select(i => i.ToString()) )}'"
-                
+                        $"Invalid agent id: '{navMeshId.GetValueOrDefault()}' provide a valid agent id for using with the NavMeshes available or bake a new NavMesh. Available: '{string.Join(", ", idSet.Select(i => i.ToString()))}'"
+
                 );
-                
+
                 // return null;
             }
             return navMeshId.GetValueOrDefault();
-        } 
+        }
 
         public NavMeshSurfaceExtended getNavMeshSurfaceForAgentId(int agentId) {
             return NavMeshSurface.activeSurfaces.Find(s => s.agentTypeID == agentId) as NavMeshSurfaceExtended;
@@ -6419,7 +6418,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 .GetPrefabs()
                 .Select(a => a.GetComponent<SimObjPhysics>())
                 .Where(sop => sop != null);
-            
+
 
             var categoriesCount = sops.GroupBy(sop => sop.ObjType).ToDictionary(g => g.Key, g => g.Count());
 
@@ -6443,7 +6442,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             );
         }
 
-        public static void TryToAddReceptacleTriggerBox(SimObjPhysics sop, float yThresMax = 0.075f, float worldOffset=-100f) {
+        public static void TryToAddReceptacleTriggerBox(SimObjPhysics sop, float yThresMax = 0.075f, float worldOffset = -100f) {
             if (sop == null) {
                 throw new NotImplementedException(
                     $"Adding receptacle trigger box is only possible the active game object, has an associated SimObjPhysics script."
@@ -6509,7 +6508,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 for (int iX = 0; iX < n; iX++) {
                     float x = xMin + iX * (xMax - xMin) / (n - 1.0f);
                     // Debug.Log($"x val: {x}");
-                    
+
                     var yVals = new List<float>();
                     for (int iZ = 0; iZ < n; iZ++) {
                         float z = zMin + iZ * (zMax - zMin) / (n - 1.0f);
@@ -6539,7 +6538,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     }
                     mat.Add(yVals);
                 }
-                
+
                 Dictionary<(int, int), int> posToGroup = new Dictionary<(int, int), int>();
                 Dictionary<int, float> groupToMaxYVal = new Dictionary<int, float>();
                 Dictionary<int, float> groupToMinYVal = new Dictionary<int, float>();
@@ -6651,7 +6650,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 }
 
                 var vector3CornerLists = new List<List<Vector3>>();
-                List<Color> colors = new List<Color>{Color.cyan, Color.yellow, Color.red, Color.magenta, Color.green, Color.blue};
+                List<Color> colors = new List<Color> { Color.cyan, Color.yellow, Color.red, Color.magenta, Color.green, Color.blue };
                 int yar = -1;
                 foreach (int group in groupToRectangles.Keys) {
                     float y = groupToMinYVal[group];
@@ -6664,7 +6663,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                         float startX = xMin + (start.Item1 - 0.5f) * (xMax - xMin) / (n - 1.0f);
                         float endX = xMin + (end.Item1 + 0.5f) * (xMax - xMin) / (n - 1.0f);
 
-                        float startZ = zMin + (start.Item2  - 0.5f) * (zMax - zMin) / (n - 1.0f);
+                        float startZ = zMin + (start.Item2 - 0.5f) * (zMax - zMin) / (n - 1.0f);
                         float endZ = zMin + (end.Item2 + 0.5f) * (zMax - zMin) / (n - 1.0f);
 
                         if (Math.Min(Math.Abs(start.Item1 - end.Item1), Math.Abs(start.Item2 - end.Item2)) <= 1) {
@@ -6699,7 +6698,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     go.transform.parent = sop.transform;
                 }
                 Physics.SyncTransforms();
-                
+
                 int cornerListInd = 0;
                 List<GameObject> boxGos = new List<GameObject>();
                 foreach (List<Vector3> cornerList in vector3CornerLists) {
@@ -6774,22 +6773,23 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
 
         public void CreateRuntimeAsset(ProceduralAsset asset) {
+            Debug.Log("BaseFPSAgentController::CreateRuntimeAsset(ProceduralAsset) Called.");
             var assetData = ProceduralTools.CreateAsset(
                 vertices: asset.vertices,
                 normals: asset.normals,
                 name: asset.name,
                 triangles: asset.triangles,
                 uvs: asset.uvs,
-                albedoTexturePath: asset.albedoTexturePath ,
-                metallicSmoothnessTexturePath: asset.metallicSmoothnessTexturePath ,
-                normalTexturePath: asset.normalTexturePath ,
+                albedoTexturePath: asset.albedoTexturePath,
+                metallicSmoothnessTexturePath: asset.metallicSmoothnessTexturePath,
+                normalTexturePath: asset.normalTexturePath,
                 emissionTexturePath: asset.emissionTexturePath,
-                colliders: asset.colliders ,
+                colliders: asset.colliders,
                 physicalProperties: asset.physicalProperties,
-                visibilityPoints: asset.visibilityPoints ,
-                annotations: asset.annotations ,
-                receptacleCandidate: asset.receptacleCandidate ,
-                yRotOffset: asset.yRotOffset ,
+                visibilityPoints: asset.visibilityPoints,
+                annotations: asset.annotations,
+                receptacleCandidate: asset.receptacleCandidate,
+                yRotOffset: asset.yRotOffset,
                 serializable: asset.serializable,
                 parentTexturesDir: asset.parentTexturesDir
             );
@@ -6802,6 +6802,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             string extension = ".msgpack.gz",
             ObjectAnnotations annotations = null
         ) {
+            Debug.Log("BaseFPSAgentController::CreateRuntimeAsset(string, string, string) Called.");
             var validDirs = new List<string>() {
                 Application.persistentDataPath,
                 Application.streamingAssetsPath
@@ -6819,8 +6820,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             var filename = $"{id}{extension}";
             var filepath = Path.Combine(dir, id, filename);
             if (!File.Exists(filepath)) {
-                 actionFinished(success: false, actionReturn: null, errorMessage: $"Asset fiile '{filepath}' does not exist.");
-                 return;
+                actionFinished(success: false, actionReturn: null, errorMessage: $"Asset fiile '{filepath}' does not exist.");
+                return;
             }
 
             // to support different
@@ -6851,7 +6852,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             } else if (presentStages.Length == 1) {
                 resultStream.Seek(0, SeekOrigin.Begin);
                 using var reader = new StreamReader(resultStream);
-                
+
                 var jsonResolver = new ShouldSerializeContractResolver();
                 var serializer = new Newtonsoft.Json.JsonSerializerSettings() {
                     ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore,
@@ -6863,14 +6864,14 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 // procAsset = Newtonsoft.Json.JsonConvert.DeserializeObject<ProceduralAsset>(reader.ReadToEnd(), serializer);
                 procAsset = JsonConvert.DeserializeObject<ProceduralAsset>(json);
             } else {
-                 actionFinished(success: false, errorMessage: $"Unexpected error with extension `{extension}`. Only supported: {string.Join(", ", supportedExtensions)}", actionReturn: null);
-                 return;
+                actionFinished(success: false, errorMessage: $"Unexpected error with extension `{extension}`. Only supported: {string.Join(", ", supportedExtensions)}", actionReturn: null);
+                return;
             }
 
 
             Debug.Log($"procAsset is null? {procAsset == null} -  {procAsset}, albedo rooted? {!Path.IsPathRooted(procAsset.albedoTexturePath)} {procAsset.albedoTexturePath}");
 
-            procAsset.parentTexturesDir =  Path.Combine(dir, id);
+            procAsset.parentTexturesDir = Path.Combine(dir, id);
             Debug.Log($" albedo after fix? {procAsset.albedoTexturePath}");
 
             var assetData = ProceduralTools.CreateAsset(
@@ -6879,24 +6880,24 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     procAsset.name,
                     procAsset.triangles,
                     procAsset.uvs,
-                    procAsset.albedoTexturePath ,
-                    procAsset.metallicSmoothnessTexturePath ,
-                    procAsset.normalTexturePath ,
-                    procAsset.emissionTexturePath ,
-                    procAsset.colliders ,
+                    procAsset.albedoTexturePath,
+                    procAsset.metallicSmoothnessTexturePath,
+                    procAsset.normalTexturePath,
+                    procAsset.emissionTexturePath,
+                    procAsset.colliders,
                     procAsset.physicalProperties,
-                    procAsset.visibilityPoints ,
+                    procAsset.visibilityPoints,
                     procAsset.annotations ?? annotations,
-                    procAsset.receptacleCandidate ,
-                    procAsset.yRotOffset ,
+                    procAsset.receptacleCandidate,
+                    procAsset.yRotOffset,
                     returnObject: true,
-                    parent:null,
+                    parent: null,
                     addAnotationComponent: false,
                     parentTexturesDir: procAsset.parentTexturesDir
                 );
 
-           // Debug.Log($"root is null? {parent == null} -  {parent}");
-           actionFinished(success: true, actionReturn: assetData);
+            // Debug.Log($"root is null? {parent == null} -  {parent}");
+            actionFinished(success: true, actionReturn: assetData);
         }
 
         public void GetStreamingAssetsPath() {
@@ -6934,8 +6935,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
             try {
                 ProceduralTools.CreateHouse(house: house, materialDb: materials);
-            } 
-            catch (Exception e) {
+            } catch (Exception e) {
                 Debug.Log(e);
                 var msg = $"Exception creating house.\n'{e.Message}'\n'{e.InnerException}'";
                 Debug.Log(msg);
@@ -7064,13 +7064,13 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             var assetDB = GameObject.FindObjectOfType<ProceduralAssetDatabase>();
             if (assetDB == null) {
                 errorMessage = "No ProceduralAssetDatabase seems to exist.";
-//                Debug.Log(errorMessage);
+                //                Debug.Log(errorMessage);
                 actionFinishedEmit(success: false);
                 return;
             }
-//            Debug.Log($"Attempting to remove until {assetLimit}");
+            //            Debug.Log($"Attempting to remove until {assetLimit}");
             assetDB.removeLRUItems(assetLimit);
-//            Debug.Log($"Items removed.");
+            //            Debug.Log($"Items removed.");
             actionFinishedEmit(success: true);
         }
 
@@ -7085,7 +7085,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
         public void AssetsInDatabase(List<string> assetIds, bool updateProceduralLRUCache = false) {
             var assetDB = GameObject.FindObjectOfType<ProceduralAssetDatabase>();
-            
+
             if (updateProceduralLRUCache) {
                 assetDB.touchProceduralLRUCache(assetIds);
             }
@@ -7099,7 +7099,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
         // returns manually annotated "hole" metadata for connectors like doors of windows, to generate
         // the correct procedural polygons when creating a procedural house.
         public void GetAssetHoleMetadata(string assetId) {
-             var assetDb = GameObject.FindObjectOfType<ProceduralAssetDatabase>();
+            var assetDb = GameObject.FindObjectOfType<ProceduralAssetDatabase>();
             if (assetDb == null) {
                 actionFinishedEmit(
                     success: false,
@@ -7124,9 +7124,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     success: false,
                     errorMessage: $"Asset '{assetId}' does not have a HoleMetadata component, it's probably not a connector like a door or window or component has to be added in the prefab."
                 );
-            
-            }
-            else {
+
+            } else {
                 actionFinishedEmit(
                     success: false,
                     actionReturn: result
@@ -7329,13 +7328,13 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             // Debug.Log($"Center: {bounds.center} radius: {radius} dist: {dist} sum: {radius + dist}");
             m_CharacterController.transform.rotation = Quaternion.identity;
             m_CharacterController.transform.position = bounds.center + Vector3.forward * (radius + dist);
-            #if UNITY_EDITOR
-                debugSpheres.Add(new DebugSphere() {
-                    color = Color.yellow,
-                    radius = radius,
-                    worldSpaceCenter = bounds.center
-                });
-            #endif
+#if UNITY_EDITOR
+            debugSpheres.Add(new DebugSphere() {
+                color = Color.yellow,
+                radius = radius,
+                worldSpaceCenter = bounds.center
+            });
+#endif
 
             m_Camera.transform.localPosition = Vector3.zero;
             m_Camera.transform.LookAt(bounds.center, Vector3.up);
@@ -7369,9 +7368,9 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             return (
                 viewportPoint.z > 0
                 && viewportPoint.x >= minSlack
-                && viewportPoint.x <= 1-minSlack
+                && viewportPoint.x <= 1 - minSlack
                 && viewportPoint.y >= minSlack
-                && viewportPoint.y <= 1-minSlack
+                && viewportPoint.y <= 1 - minSlack
             );
         }
 
@@ -7481,7 +7480,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     byte_arrays = null;
                     break;
                 }
-//                Debug.Log($"Computed dist: {dist}");
+                //                Debug.Log($"Computed dist: {dist}");
 
                 cameraPosition = bounds.center + Vector3.Normalize(cameraPosition - bounds.center) * dist;
                 renderCamera.transform.position = cameraPosition;
@@ -7498,8 +7497,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 byte[] byteArray = renderResult.EncodeToPNG();
                 byte_arrays.Add(byteArray);
 
-//                string filePath = Path.Combine("/Users/lucaw/tmp/yar", $"render_{angle}.png");
-//                File.WriteAllBytes(filePath, byteArray);
+                //                string filePath = Path.Combine("/Users/lucaw/tmp/yar", $"render_{angle}.png");
+                //                File.WriteAllBytes(filePath, byteArray);
 
                 // Clean up
                 Texture2D.Destroy(renderResult);
@@ -7585,20 +7584,19 @@ namespace UnityStandardAssets.Characters.FirstPerson {
         public void OverwriteNavMeshes(List<NavMeshConfig> navMeshConfigs) {
             var navmesh = GameObject.FindObjectOfType<NavMeshSurfaceExtended>();
             Transform parent;
-            if (navmesh == null) { 
+            if (navmesh == null) {
                 var go = GameObject.Find(ProceduralTools.NavMeshSurfaceParent());
                 if (go == null) {
                     actionFinishedEmit(false, null, $"No '{ProceduralTools.NavMeshSurfaceParent()}' gameobject found, make sure scene was proceduraly created by `CreateHouse`.");
                     return;
                 }
                 parent = go.transform;
-            }
-            else {
+            } else {
                 parent = navmesh.transform.parent;
             }
             var floorGo = parent.parent;
 
-            for (var i =0; i< parent.transform.childCount;  i++) {
+            for (var i = 0; i < parent.transform.childCount; i++) {
                 var navmeshObj = parent.transform.GetChild(i);
                 var navMeshSurf = navmeshObj.GetComponent<NavMeshSurfaceExtended>();
                 navMeshSurf.RemoveData();
@@ -7606,7 +7604,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             }
             Destroy(parent.gameObject);
 
-            
+
             ProceduralTools.buildNavMeshes(floorGo.gameObject, navMeshConfigs);
             actionFinishedEmit(success: true);
 
@@ -7620,13 +7618,11 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             }
             if (navMeshConfigs != null && navMeshConfigs.Count != navmeshes.Count()) {
                 actionFinishedEmit(success: false, errorMessage: $"Provided `navMeshConfigs` count does not match active navmeshSurfaces, provided: {navMeshConfigs.Count} current: {navmeshes.Count()}");
-            } 
-            else if (navMeshConfigs != null){
+            } else if (navMeshConfigs != null) {
                 for (var i = 0; i < navmeshes.Count(); i++) {
                     navmeshes[i].BuildNavMesh(ProceduralTools.navMeshConfigToBuildSettings(navMeshConfigs[i]));
                 }
-            }
-            else {
+            } else {
                 foreach (var navmesh in navmeshes) {
                     navmesh.BuildNavMesh(navmesh.buildSettings);
                 }
@@ -7646,21 +7642,21 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
 
         public void CreateNewNavMesh(NavMeshConfig navMeshConfig) {
-            
+
             var navmesh = GameObject.FindObjectOfType<NavMeshSurfaceExtended>();
-             if (navmesh == null) {
+            if (navmesh == null) {
                 actionFinishedEmit(false, null, "No NavMeshSurfaceExtended component found, make sure scene was proceduraly created by `CreateHouse`.");
                 return;
             }
             var navMeshParent = navmesh.transform.parent;
 
             var id = NavMeshSurfaceExtended.activeSurfaces.Count();
-            
+
 
             var go = ProceduralTools.buildNavMeshSurface(navMeshConfig, id);
             go.transform.parent = navMeshParent.transform;
 
-           
+
             // ProceduralTools.tagObjectNavmesh(this.gameObject, ignore: true);
             // navmesh.BuildNavMesh();
             actionFinishedEmit(true);
@@ -7763,12 +7759,12 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             // Here we shift minX and maxX slightly 2% towards one another so that we're
             // not sampling directly along the boundary
             float alpha = 0.02f;
-            float shrunkMinX = minX * (1-alpha) + maxX * alpha;
-            float shrunkMaxX = minX * alpha + maxX * (1-alpha);
+            float shrunkMinX = minX * (1 - alpha) + maxX * alpha;
+            float shrunkMaxX = minX * alpha + maxX * (1 - alpha);
 
             // Same for minY and maxY
-            float shrunkMinY = minY * (1-alpha) + maxY * alpha;
-            float shrunkMaxY = minY * alpha + maxY * (1-alpha);
+            float shrunkMinY = minY * (1 - alpha) + maxY * alpha;
+            float shrunkMaxY = minY * alpha + maxY * (1 - alpha);
 
             for (int i = 0; i < divisions; i++) {
                 for (int j = 0; j < divisions; j++) {
@@ -7822,10 +7818,10 @@ namespace UnityStandardAssets.Characters.FirstPerson {
         public void GetLights() {
             print("GetLights in BASE happening now");
             //debug
-            #if UNITY_EDITOR
+#if UNITY_EDITOR
             List<LightParameters> lights = UtilityFunctions.GetLightPropertiesOfScene();
             UtilityFunctions.debugGetLightPropertiesOfScene(lights);
-            #endif
+#endif
 
             actionFinishedEmit(true, UtilityFunctions.GetLightPropertiesOfScene());
         }
@@ -7860,12 +7856,12 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 );
             }
             CollisionDetectionMode collDet = CollisionDetectionMode.ContinuousSpeculative;
-            
+
             Enum.TryParse(collisionDetectionMode, true, out collDet);
-            for (var i = 0; i<rootObject.transform.childCount; i++) {
+            for (var i = 0; i < rootObject.transform.childCount; i++) {
                 var obj = rootObject.transform.GetChild(i);
                 var rb = obj.GetComponent<Rigidbody>();
-                if  (!rb.isKinematic) {
+                if (!rb.isKinematic) {
                     rb.collisionDetectionMode = collDet;
                 }
             }
@@ -8016,6 +8012,50 @@ namespace UnityStandardAssets.Characters.FirstPerson {
         public void Destroy(GameObject targetObject) {
             MonoBehaviour.Destroy(targetObject);
         }
+
+        public void ExportSceneToGLB(string export_path) {
+            // Debug.Log("BaseFPSAgentController:ExportSceneToGLB(string) Called.");
+            GameObject[] allObjects = GameObject.FindObjectsOfType<GameObject>();
+            var rootObjects = new List<GameObject>();
+            foreach (GameObject obj in allObjects) {
+                if (obj.transform.parent == null) {
+                    rootObjects.Add(obj);
+                }
+            }
+            var exportSettings = new ExportSettings {
+                Format = GltfFormat.Binary,
+                FileConflictResolution = FileConflictResolution.Overwrite,
+                ComponentMask = ~ComponentType.Camera,
+            };
+            var export = new GameObjectExport(exportSettings);
+            export.AddScene(rootObjects.ToArray());
+            
+            export.SaveToFileAndDispose(export_path)
+                .ContinueWith(task => {
+                    if (task.IsCompleted) {
+                        actionFinished(task.Result);
+                    } else {
+                        actionFinished(false);
+                    }
+                }, TaskScheduler.FromCurrentSynchronizationContext());
+        }       
+
+        /*
+        public void ExportSceneToGLB(string export_path) {
+            Scene activeScene = SceneManager.GetActiveScene();
+
+            if (!activeScene.IsValid()) {
+                Debug.LogError("BaseFPSAgentController.ExportSceneToGLB(string): No valid scene found.");
+                actionFinished(false);
+            }
+
+            foreach (GameObject rootObj in activeScene.GetRootGameObjects()) {
+                Debug.Log($"BaseFPSAgentController.ExportSceneToGLB(string): Root object: {rootObj.name}");
+            }
+
+            actionFinished(true);
+        }
+        */
 
     }
 
