@@ -31,6 +31,8 @@ using System.Linq.Expressions;
 using System.Threading.Tasks;
 using GLTFast;
 using System.Data;
+using Mono.Cecil;
+using GLTFast.Logging;
 
 namespace UnityStandardAssets.Characters.FirstPerson {
 
@@ -145,6 +147,13 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             get => this.baseAgentComponent.GripperOpennessStates;
         }
 
+        private static readonly string[] cleanedNames = new string[] {"Structure", "Objects", "ProceduralLighting"};
+
+        private static readonly string[] cleanedNamePrefixes = new string[] {"Structure_", "Objects_"};
+
+        private static readonly string[] allowedExactNames = new string[] {"Structure", "Objects"};
+
+        private static readonly string[] allowedNamePrefixes = new string[] {"Structure_", "Objects_"};
 
         protected bool IsHandDefault = true;
         public GameObject ItemInHand = null; // current object in inventory
@@ -8013,6 +8022,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             MonoBehaviour.Destroy(targetObject);
         }
 
+        /*
         public void ExportSceneToGLB(string export_path) {
             // Debug.Log("BaseFPSAgentController:ExportSceneToGLB(string) Called.");
             GameObject[] allObjects = GameObject.FindObjectsOfType<GameObject>();
@@ -8039,23 +8049,232 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     }
                 }, TaskScheduler.FromCurrentSynchronizationContext());
         }       
+        */
 
-        /*
-        public void ExportSceneToGLB(string export_path) {
-            Scene activeScene = SceneManager.GetActiveScene();
+        private static bool IsNameEligible(string name) {
+            // Check for exact name matches
+            foreach (string exactName in allowedExactNames)
+            {
+                if (name.Equals(exactName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            // Check for name prefixes
+            foreach (string prefix in allowedNamePrefixes)
+            {
+                if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+        private static bool IsNameEligibleClean(string name) {
+            // Check for exact name matches
+            foreach (string exactName in cleanedNames)
+            {
+                if (name.Equals(exactName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            // Check for name prefixes
+            foreach (string prefix in cleanedNamePrefixes)
+            {
+                if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+         
+        public static GameObject SimplifyScene(GameObject rootToExport) {
+            GameObject simplifiedRoot = new GameObject("SimplifiedExportRoot");
+            Dictionary<Material, List<MeshFilter>> meshesByMaterial = new Dictionary<Material, List<MeshFilter>>();
+            
+            // 1. 筛选并分组 (逻辑不变)
+            foreach (MeshFilter mf in rootToExport.GetComponentsInChildren<MeshFilter>(true))
+            {
+                MeshRenderer mr = mf.GetComponent<MeshRenderer>();
+                if (mr == null || !mr.enabled || mf.sharedMesh == null)
+                    continue;
+
+                Material mat = mr.sharedMaterial;
+
+                if (mat == null)
+                    continue;
+                if (!meshesByMaterial.ContainsKey(mat))
+                    meshesByMaterial.Add(mat, new List<MeshFilter>());
+                meshesByMaterial[mat].Add(mf);
+            }
+
+            Debug.Log($"找到 {meshesByMaterial.Count} 种不同材质，将进行合并与烘焙...");
+
+            foreach (var pair in meshesByMaterial)
+            {
+                Material originalMaterial = pair.Key;
+                List<MeshFilter> meshFilters = pair.Value;
+
+                // 2. 合并网格 (逻辑不变)
+                List<CombineInstance> combineInstances = new List<CombineInstance>();
+                foreach (MeshFilter mf in meshFilters)
+                {
+                    CombineInstance ci = new CombineInstance();
+                    ci.mesh = mf.sharedMesh;
+                    ci.transform = mf.transform.localToWorldMatrix;
+                    combineInstances.Add(ci);
+                }
+                Mesh combinedMesh = new Mesh();
+                combinedMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                combinedMesh.CombineMeshes(combineInstances.ToArray(), true, true);
+
+                // --- 3. UV烘焙核心逻辑 ---
+                Vector2 tiling = originalMaterial.mainTextureScale;
+                Vector2 offset = originalMaterial.mainTextureOffset;
+                Material materialForExport = originalMaterial; // 默认使用原材质
+                Mesh meshForExport = combinedMesh; // 默认使用合并后的网格
+
+                // 检查是否存在非默认的纹理变换
+                if (tiling != Vector2.one || offset != Vector2.zero)
+                {
+                    Debug.Log($"材质 '{originalMaterial.name}' 存在纹理变换(Tiling/Offset)，开始烘焙UV...");
+
+                    // 克隆一个新的网格以进行修改
+                    meshForExport = Mesh.Instantiate(combinedMesh); 
+                    
+                    Vector2[] uvs = meshForExport.uv;
+                    Vector2[] bakedUvs = new Vector2[uvs.Length];
+
+                    for (int i = 0; i < uvs.Length; i++)
+                    {
+                        // 应用Tiling和Offset变换
+                        bakedUvs[i].x = uvs[i].x * tiling.x + offset.x;
+                        bakedUvs[i].y = uvs[i].y * tiling.y + offset.y;
+                    }
+                    
+                    // 将烘焙后的UV应用到新网格上
+                    meshForExport.uv = bakedUvs;
+
+                    // 克隆一个新的材质
+                    materialForExport = Material.Instantiate(originalMaterial);
+                    // 重置新材质的纹理变换，因为变换信息已经被烘焙到UV里了
+                    materialForExport.mainTextureScale = Vector2.one;
+                    materialForExport.mainTextureOffset = Vector2.zero;
+                }
+                
+                // 4. 创建最终用于导出的对象
+                GameObject finalObject = new GameObject("FinalMesh_" + originalMaterial.name);
+                finalObject.AddComponent<MeshFilter>().sharedMesh = meshForExport;
+                finalObject.AddComponent<MeshRenderer>().sharedMaterial = materialForExport;
+                finalObject.transform.SetParent(simplifiedRoot.transform, false);
+            }
+
+            simplifiedRoot.transform.position = Vector3.zero;
+            simplifiedRoot.transform.rotation = Quaternion.identity;
+            simplifiedRoot.transform.localScale = Vector3.one;
+
+            return simplifiedRoot;
+        }
+
+        public void ExportSceneToGLB(string export_path, bool binary) {
+            // Scene activeScene = UnityEngine.SceneManager.GetActiveScene();
+            Scene activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
 
             if (!activeScene.IsValid()) {
                 Debug.LogError("BaseFPSAgentController.ExportSceneToGLB(string): No valid scene found.");
                 actionFinished(false);
+                return;
             }
 
             foreach (GameObject rootObj in activeScene.GetRootGameObjects()) {
                 Debug.Log($"BaseFPSAgentController.ExportSceneToGLB(string): Root object: {rootObj.name}");
             }
 
-            actionFinished(true);
+            List<GameObject> modelObjects = new List<GameObject>();
+            List<GameObject> cleanObjects = new List<GameObject>();
+            foreach (GameObject rootObj in activeScene.GetRootGameObjects()) {
+                Debug.Log($"BaseFPSAgentController.ExportSceneToGLB(string): The root GameObject included by this scene: {rootObj.name}.");
+
+                if (IsNameEligible(rootObj.name)) {
+                    modelObjects.Add(rootObj);
+                }
+
+                if (IsNameEligibleClean(rootObj.name)) {
+                    cleanObjects.Add(rootObj);
+                }
+
+            }
+
+            if (modelObjects.Count == 0) {
+                Debug.LogWarning("BaseFPSAgentController.ExportSceneToGLB(string): No eligible root GameObjects found in the active scene to export.");
+                actionFinished(false);
+                return;
+            }
+
+            GameObject tempParent = new GameObject("TempExportParent");
+
+            try {
+                foreach (GameObject obj in modelObjects) {
+                    if (obj == tempParent) {
+                        Debug.Log("Has tempParent");
+                        continue;
+                    }
+
+                    GameObject duplicate = GameObject.Instantiate(obj);
+                    duplicate.name = obj.name;
+                    duplicate.transform.SetParent(tempParent.transform, false);
+
+                    Debug.Log($"BaseFPSAgentController.ExportSceneToGLB(string): Duplicated GameObject: {duplicate.name} with children count: {duplicate.transform.childCount}");
+                }
+
+                for (int i = 0; i < tempParent.transform.childCount; i++) {
+                    Transform child = tempParent.transform.GetChild(i);
+                    Debug.Log($"BaseFPSAgentController.ExportSceneToGLB(string): - Child {i + 1}: {child.gameObject.name} with {child.childCount} children.");
+                }
+
+                tempParent.transform.position = Vector3.zero;
+                tempParent.transform.localScale = Vector3.one;
+                tempParent.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+
+                if (tempParent.transform.childCount == 0) {
+                    Debug.LogError("BaseFPSAgentController.ExportSceneToGLB(string): TempExportParent has no children to export.");
+                    return;
+                }
+
+                GameObject simplifiedRoot = SimplifyScene(tempParent);
+
+                var logger = new CollectingLogger();
+                var exportSettings = new ExportSettings {
+                    Format = binary ? GltfFormat.Binary : GltfFormat.Json,
+                    FileConflictResolution = FileConflictResolution.Overwrite,
+                    ComponentMask = ~(ComponentType.Camera | ComponentType.Animation)
+                };
+                var gameObjectExportSettings = new GameObjectExportSettings {
+                    OnlyActiveInHierarchy = false,
+                    DisabledComponents = false
+                };
+
+                var export = new GameObjectExport(exportSettings, gameObjectExportSettings, logger: logger);
+                // export.AddScene(modelObjects.ToArray());
+                export.AddScene(new []{ simplifiedRoot });
+
+                export.SaveToFileAndDispose(export_path)
+                    .ContinueWith(task => {
+                        if (task.IsCompleted) {
+                            Debug.Log("actionFinished(task.Result);");
+                            GameObject.Destroy(simplifiedRoot);
+                            actionFinished(task.Result);
+                        } else {
+                            GameObject.Destroy(simplifiedRoot);
+                            actionFinished(false);
+                        }
+                    }, TaskScheduler.FromCurrentSynchronizationContext());
+
+                Debug.Log("BaseFPSAgentController.ExportSceneToGLB(string): Export finished.");
+
+            } catch (Exception ex) {
+                Debug.LogError($"BaseFPSAgentController.ExportSceneToGLB(string): Failed to export eligible GameObjects to FBX: {ex.Message}\n{ex.StackTrace}");
+            }
+
         }
-        */
 
     }
 
