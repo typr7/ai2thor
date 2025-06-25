@@ -8168,8 +8168,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             }
 
             simplifiedRoot.transform.position = Vector3.zero;
-            simplifiedRoot.transform.rotation = Quaternion.identity;
             simplifiedRoot.transform.localScale = Vector3.one;
+            simplifiedRoot.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 
             return simplifiedRoot;
         }
@@ -8182,10 +8182,6 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 Debug.LogError("BaseFPSAgentController.ExportSceneToGLB(string): No valid scene found.");
                 actionFinished(false);
                 return;
-            }
-
-            foreach (GameObject rootObj in activeScene.GetRootGameObjects()) {
-                Debug.Log($"BaseFPSAgentController.ExportSceneToGLB(string): Root object: {rootObj.name}");
             }
 
             List<GameObject> modelObjects = new List<GameObject>();
@@ -8232,7 +8228,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
                 tempParent.transform.position = Vector3.zero;
                 tempParent.transform.localScale = Vector3.one;
-                tempParent.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+                tempParent.transform.rotation = Quaternion.identity;
 
                 if (tempParent.transform.childCount == 0) {
                     Debug.LogError("BaseFPSAgentController.ExportSceneToGLB(string): TempExportParent has no children to export.");
@@ -8247,12 +8243,8 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     FileConflictResolution = FileConflictResolution.Overwrite,
                     ComponentMask = ~(ComponentType.Camera | ComponentType.Animation)
                 };
-                var gameObjectExportSettings = new GameObjectExportSettings {
-                    OnlyActiveInHierarchy = false,
-                    DisabledComponents = false
-                };
 
-                var export = new GameObjectExport(exportSettings, gameObjectExportSettings, logger: logger);
+                var export = new GameObjectExport(exportSettings, logger: logger);
                 // export.AddScene(modelObjects.ToArray());
                 export.AddScene(new []{ simplifiedRoot });
 
