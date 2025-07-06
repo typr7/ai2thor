@@ -29,10 +29,11 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
-using GLTFast;
 using System.Data;
 using Mono.Cecil;
+using System.Runtime.InteropServices;
 using GLTFast.Logging;
+using GLTFast;
 
 namespace UnityStandardAssets.Characters.FirstPerson {
 
@@ -8023,31 +8024,12 @@ namespace UnityStandardAssets.Characters.FirstPerson {
         }
 
         /*
-        public void ExportSceneToGLB(string export_path) {
-            // Debug.Log("BaseFPSAgentController:ExportSceneToGLB(string) Called.");
-            GameObject[] allObjects = GameObject.FindObjectsOfType<GameObject>();
-            var rootObjects = new List<GameObject>();
-            foreach (GameObject obj in allObjects) {
-                if (obj.transform.parent == null) {
-                    rootObjects.Add(obj);
-                }
-            }
-            var exportSettings = new ExportSettings {
-                Format = GltfFormat.Binary,
-                FileConflictResolution = FileConflictResolution.Overwrite,
-                ComponentMask = ~ComponentType.Camera,
-            };
-            var export = new GameObjectExport(exportSettings);
-            export.AddScene(rootObjects.ToArray());
-            
-            export.SaveToFileAndDispose(export_path)
-                .ContinueWith(task => {
-                    if (task.IsCompleted) {
-                        actionFinished(task.Result);
-                    } else {
-                        actionFinished(false);
-                    }
-                }, TaskScheduler.FromCurrentSynchronizationContext());
+        public void ExportSceneToGLB(string export_path, bool binary) {
+            RuntimeSceneExporter exporter = new RuntimeSceneExporter();
+
+            bool result = exporter.ExportSceneToGLB(export_path, binary);
+
+            actionFinished(result);
         }       
         */
 
@@ -8105,8 +8087,6 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                     meshesByMaterial.Add(mat, new List<MeshFilter>());
                 meshesByMaterial[mat].Add(mf);
             }
-
-            Debug.Log($"找到 {meshesByMaterial.Count} 种不同材质，将进行合并与烘焙...");
 
             foreach (var pair in meshesByMaterial)
             {
@@ -8170,6 +8150,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             simplifiedRoot.transform.position = Vector3.zero;
             simplifiedRoot.transform.localScale = Vector3.one;
             simplifiedRoot.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            // simplifiedRoot.transform.rotation = Quaternion.identity;
 
             return simplifiedRoot;
         }
@@ -8209,11 +8190,6 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
             try {
                 foreach (GameObject obj in modelObjects) {
-                    if (obj == tempParent) {
-                        Debug.Log("Has tempParent");
-                        continue;
-                    }
-
                     GameObject duplicate = GameObject.Instantiate(obj);
                     duplicate.name = obj.name;
                     duplicate.transform.SetParent(tempParent.transform, false);
@@ -8245,7 +8221,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
                 };
 
                 var export = new GameObjectExport(exportSettings, logger: logger);
-                // export.AddScene(modelObjects.ToArray());
+
                 export.AddScene(new []{ simplifiedRoot });
 
                 export.SaveToFileAndDispose(export_path)
