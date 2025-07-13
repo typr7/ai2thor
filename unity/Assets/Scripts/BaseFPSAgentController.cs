@@ -19,7 +19,6 @@ using Thor.Procedural;
 using Thor.Procedural.Data;
 using Newtonsoft.Json;
 
-using GLTFast.Export;
 
 using MessagePack.Resolvers;
 using MessagePack.Formatters;
@@ -30,8 +29,8 @@ using System.IO.Compression;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using System.Data;
-using Mono.Cecil;
 using System.Runtime.InteropServices;
+using GLTFast.Export;
 using GLTFast.Logging;
 using GLTFast;
 
@@ -8023,16 +8022,6 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             MonoBehaviour.Destroy(targetObject);
         }
 
-        /*
-        public void ExportSceneToGLB(string export_path, bool binary) {
-            RuntimeSceneExporter exporter = new RuntimeSceneExporter();
-
-            bool result = exporter.ExportSceneToGLB(export_path, binary);
-
-            actionFinished(result);
-        }       
-        */
-
         private static bool IsNameEligible(string name) {
             // Check for exact name matches
             foreach (string exactName in allowedExactNames)
@@ -8050,6 +8039,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
 
             return false;
         }
+        
         private static bool IsNameEligibleClean(string name) {
             // Check for exact name matches
             foreach (string exactName in cleanedNames)
@@ -8243,6 +8233,7 @@ namespace UnityStandardAssets.Characters.FirstPerson {
             }
 
         }
+        
 
     }
 
