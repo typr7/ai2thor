@@ -186,6 +186,8 @@ def _build(
         f"{_unity_path()}"
         f" -quit"
         f" -batchmode"
+        # f" -username irstca1se@outlook.com"
+        # f" -password v4cadMHEC9XKyz4."
         f" -logFile {os.getcwd()}/{build_name}.log"
         f" -projectpath {project_path}"
         f" -buildTarget {build_target_map.get(arch, arch)}"
@@ -872,7 +874,7 @@ def pre_test(context):
         "unity/builds/%s" % c.build_name(),
     )
 
-import scripts.update_private
+import ai2thor_scripts.update_private
 
 
 def clean(private_repos=tuple()):
@@ -1110,14 +1112,14 @@ def ci_build(
         
 
     private_repos = [
-        scripts.update_private.Repo(
+        ai2thor_scripts.update_private.Repo(
             url=private_url,
             target_dir=os.path.join(base_dir, "unity", "Assets", "Private"),
             delete_before_checkout=True,
         )
     ]
 
-    novelty_thor_repo = scripts.update_private.Repo(
+    novelty_thor_repo = ai2thor_scripts.update_private.Repo(
         url=novelty_thor_url,
         target_dir=os.path.join(base_dir, "unity", "Assets", "Resources", "ai2thor-objaverse"),
         delete_before_checkout=is_travis_build,
@@ -1131,7 +1133,7 @@ def ci_build(
     else:
         # Needs to be here so we overwrite any existing NoveltyTHOR repo
         private_repos.append(
-            scripts.update_private.Repo(
+            ai2thor_scripts.update_private.Repo(
                 url=novelty_thor_url,
                 target_dir=os.path.join(base_dir, "unity", "Assets", "Resources", "ai2thor-objaverse"),
                 delete_before_checkout=is_travis_build,
